@@ -1,0 +1,32 @@
+#cloud-config
+
+write_files:
+- path: /etc/NetworkManager/conf.d/99-azure-unmanaged-devices.conf
+  content: |
+    # Ignore SR-IOV interface on Azure, since it'll be transparently bonded
+    # to the synthetic interface
+    [keyfile]
+    unmanaged-devices=driver:mlx4_core;driver:mlx5_core;driver:mana
+- content: |
+    driftfile /var/lib/chrony/chrony.drift
+    logdir /var/log/chrony
+    refclock PHC /dev/ptp_hyperv poll 3 dpoll -2
+    makestep 1.0 -1
+  path: /etc/chrony.conf
+- content: |
+    ACTION=="add", SUBSYSTEM=="net", DRIVERS=="hv_netvsc", ATTR{type}=="1", PROGRAM="/lib/udev/rename_device", RESULT=="?*", NAME="$result"
+  path: /etc/udev/rules.d/60-net.rules
+- content: |
+    net.ipv4.conf.eth0.forwarding=1
+  path: /etc/sysctl.d/10-forwarding.conf
+
+runcmd:
+- /usr/bin/systemctl restart chronyd
+- /usr/bin/mkdir /var/log/journal
+- /usr/bin/systemctl restart systemd-journald
+- /usr/bin/journalctl --flush
+- /usr/bin/systemctl restart systemd-sysctl
+- /usr/bin/systemctl disable --now firewalld
+#- nmcli con mod "System eth0" mtu 9000 && nmcli device reapply eth0
+- nmcli con mod "System eth0" mtu 3900 && nmcli device reapply eth0
+

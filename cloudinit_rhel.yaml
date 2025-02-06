@@ -1,0 +1,49 @@
+#cloud-config
+
+write_files:
+- path: /etc/NetworkManager/conf.d/99-azure-unmanaged-devices.conf
+  content: |
+    # Ignore SR-IOV interface on Azure, since it'll be transparently bonded
+    # to the synthetic interface
+    [keyfile]
+    unmanaged-devices=driver:mlx4_core;driver:mlx5_core;driver:mana
+- content: |
+    driftfile /var/lib/chrony/chrony.drift
+    logdir /var/log/chrony
+    refclock PHC /dev/ptp_hyperv poll 3 dpoll -2
+    makestep 1.0 -1
+  path: /etc/chrony.conf
+- content: |
+    ACTION=="add", SUBSYSTEM=="net", DRIVERS=="hv_netvsc", ATTR{type}=="1", PROGRAM="/lib/udev/rename_device", RESULT=="?*", NAME="$result"
+  path: /etc/udev/rules.d/60-net.rules
+- content: |
+    # Azure specific rules.
+
+    # Section 1: NVMe drives
+    # Azure rules for NVMe drives
+    # will create links in /dev/disk/azure/data/by-lun with LUN IDs for data disks
+    ACTION!="add|change", GOTO="azure_nvme_end"
+    SUBSYSTEM!="block", GOTO="azure_nvme_end"
+    KERNEL!="nvme*", GOTO="azure_nvme_end"
+    ENV{ID_MODEL}=="MSFT NVMe Accelerator v1.0", GOTO="azure_nvme_remote_start"
+
+    LABEL="azure_nvme_remote_start"
+    # create os disk symlink
+    KERNEL=="nvme*[0-9]n1", ENV{DEVTYPE}=="disk", ENV{ID_MODEL}=="MSFT NVMe Accelerator v1.0", SYMLINK+="disk/azure/root", GOTO="azure_udev_end"
+    # create os disk symlink partitions
+    KERNEL=="nvme*[0-9]n1p[0-9]", ENV{DEVTYPE}=="partition", ENV{ID_MODEL}=="MSFT NVMe Accelerator v1.0", SYMLINK+="disk/azure/root-part%n", GOTO="azure_udev_end"
+    # create SYMLINKs for NVMe disks mapping to LUN IDs from Azure portal by subtracting 2 (NVMe Namespace ID starts at 1, first data disk has Namespace ID 2 which matches LUN ID 0)
+    KERNEL=="nvme*[0-9]n*[0-9]", ENV{DEVTYPE}=="disk", ENV{ID_MODEL}=="MSFT NVMe Accelerator v1.0", ENV{ID_SERIAL_SHORT}=="?*", ENV{ID_NSID}=="?*", OPTIONS="string_escape=replace", ENV{ID_SERIAL}="$env{ID_MODEL}_$env{ID_SERIAL_SHORT}_$env{ID_NSID}", PROGRAM+="/bin/sh -c 'let LUNID=$env{ID_NSID}-2; echo $LUNID'", SYMLINK+="disk/azure/data/by-lun/%c", GOTO="azure_udev_end"
+    # create SYMLINKs for NVMe partitions
+    KERNEL=="nvme*[0-9]n*[0-9]p[0-9]", ENV{DEVTYPE}=="partition", ENV{ID_MODEL}=="MSFT NVMe Accelerator v1.0", ENV{ID_SERIAL_SHORT}=="?*", ENV{ID_NSID}=="?*", OPTIONS="string_escape=replace", ENV{ID_SERIAL}="$env{ID_MODEL}_$env{ID_SERIAL_SHORT}_$env{ID_NSID}", PROGRAM+="/bin/sh -c 'let LUNID=$env{ID_NSID}-2; echo $LUNID'", SYMLINK+="disk/azure/data/by-lun/%c-part%n", GOTO="azure_udev_end"
+    GOTO="azure_udev_end"
+
+    LABEL="azure_nvme_end"
+    LABEL="azure_udev_end"
+  path: /etc/udev/rules.d/88-azure-nvme-data-disk.rules
+
+runcmd:
+- /bin/systemctl restart chronyd
+- /usr/bin/mkdir /var/log/journal
+- /bin/systemctl restart systemd-journald
+- /usr/bin/journalctl --flush
