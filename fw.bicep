@@ -42,7 +42,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
 resource vnetfw 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   location: location
   name: 'vnetfw'
-  // tags: mytags
   tags: union(mytags, {fastpathenabled: 'true'})
   properties: {
     privateEndpointVNetPolicies: privateEndpointVNetPolicies
@@ -273,6 +272,39 @@ resource nic1 'Microsoft.Network/networkInterfaces@2024-05-01' = {
           publicIPAddress: {
             id: pip.id
           }
+        }
+      }
+      {
+        name: 'ipconfig2'
+        properties: {
+          primary: false
+          subnet: {
+            id: subnet.id
+          }
+          privateIPAllocationMethod: 'Static'
+          privateIPAddress: '10.0.0.5'
+        }
+      }
+      {
+        name: 'ipconfig3'
+        properties: {
+          primary: false
+          subnet: {
+            id: subnet.id
+          }
+          privateIPAllocationMethod: 'Static'
+          privateIPAddress: '10.0.0.6'
+        }
+      }
+      {
+        name: 'ipconfig4'
+        properties: {
+          primary: false
+          subnet: {
+            id: subnet.id
+          }
+          privateIPAllocationMethod: 'Static'
+          privateIPAddress: '10.0.0.7'
         }
       }
     ]
@@ -612,7 +644,6 @@ resource fw 'Microsoft.Compute/virtualMachineScaleSets@2024-07-01' = {
   location: location
   // tags: union(mytags, {disableSnatOnPL: 'true'})
   tags: union(mytags, {fastpathenabled: 'true'})
-  // tags: mytags
   identity: {
     type: 'SystemAssigned'
   }
@@ -621,7 +652,7 @@ resource fw 'Microsoft.Compute/virtualMachineScaleSets@2024-07-01' = {
   ]
   sku: {
     capacity: 1
-    name: vmSize
+    name: 'Standard_D16as_v4'
   }
 
   properties: {
