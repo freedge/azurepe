@@ -602,6 +602,9 @@ resource lb 'Microsoft.Network/loadBalancers@2024-01-01' = {
           privateIPAddress: '192.168.0.10'
           privateIPAllocationMethod: 'Static'
         }
+        zones: [
+          '3'
+        ]
       }
     ]
     loadBalancingRules: [
