@@ -42,6 +42,11 @@ func main() {
 			}
 			conn.SetKeepAlive(false)
 
+			buf := make([]byte, 4)
+			if n, err := conn.Read(buf); n != 4 || err != nil {
+				println("First read failed", n, err)
+			}
+
 			<-quit
 
 			conn.Close()

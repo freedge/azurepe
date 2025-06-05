@@ -41,6 +41,8 @@ func main() {
 
 		go func(conn net.Conn) {
 			defer conn.Close()
+			// actually send 1 packet
+			conn.Write([]byte("ping"))
 			// just hang there
 			<-quit
 		}(conn)
