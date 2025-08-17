@@ -1,7 +1,6 @@
 
 ```bash
-# both
-# check udev rule well applied
+# check udev rule well applied if needed
 # disable firewalld
 systemd disable --now firewalld
 ```
@@ -25,12 +24,14 @@ ip link set geneve0 mtu 450
 
 systemd-run -p DynamicUser=true -u iperf1 iperf3 -s -p 5201 --interval 60
 systemd-run -p DynamicUser=true -u iperf2 iperf3 -s -p 5202 --interval 60
-systemd-run -p DynamicUser=true -u iperf3 iperf3 -s -p 5203 --interval 60
+systemd-run -p DynamicUser=true -u iperf_3 iperf3 -s -p 5203 --interval 60
 systemd-run -p DynamicUser=true -u iperf4 iperf3 -s -p 5204 --interval 60
 
-DLID=$(devlink health | grep -o -P 'auxiliary/[^:]*')
-VF=eth1
-while sleep 0.2 ; do until devlink health diagnose $DLID reporter tx | grep stopped | grep true; do sleep 0.1 ; done && date && ethtool -S $VF && grep . /sys/class/net/${VF}/queues/tx-*/byte_queue_limits/inflight && sleep 0.2 && ethtool -S $VF && grep . /sys/class/net/${VF}/queues/tx-*/byte_queue_limits/inflight; done | tee ethtools
+VF=$(ip -j link  | jq '.[] | select (.master == "eth0") | .ifname' -r)
+BUS=$(ethtool -i $(ip -j link  | jq '.[] | select (.master == "eth0") | .ifname' -r) | grep -o -P '(?<=bus-info: ).*')
+DLID=$(devlink health | grep -A 10 $BUS | grep -o -P 'auxiliary/[^:]*')
+
+while sleep 0.1 ; do until devlink health diagnose $DLID reporter tx | grep stopped | grep true; do sleep 0.1 ; done && date && ethtool -S $VF && grep . /sys/class/net/${VF}/queues/tx-*/byte_queue_limits/inflight && sleep 0.1 && ethtool -S $VF && grep . /sys/class/net/${VF}/queues/tx-*/byte_queue_limits/inflight; done | tee ethtools
 ```
 
 ```bash
@@ -40,4 +41,15 @@ systemd-run --user -u client4 iperf3 -c 10.0.0.5 -w 25k -t 80000 -p 5204 -P 112 
 systemd-run --user -u client3 iperf3 -c 10.200.2.1 -p 5203 -t 80000 -R -P 64 -i 60
 systemd-run --user -u client2 iperf3 -c 10.200.2.1 -p 5202 -t 80000 -P 64 -i 60
 systemd-run --user -u ping    ping vm2 -O
+```
+
+```bash
+# download packages on ubuntu
+sudo apt-get update
+sudo apt download tcpdump
+sudo apt download iputils-ping
+sudo apt download iperf3
+sudo apt install --simulate ./*.deb
+sudo apt download  ibverbs-providers libibverbs1 libiperf0 libnl-3-200 libnl-route-3-200 libpcap0.8t64 libsctp1  lksctp-tools libjq1 libonig5 jq
+sudo apt install tmux
 ```

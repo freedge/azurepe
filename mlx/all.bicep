@@ -544,12 +544,6 @@ resource vm1 'Microsoft.Compute/virtualMachines@2024-11-01' = if (true) {
             primary: true
           }
         }
-        {
-          id: nic12.id
-          properties: {
-            primary: false
-          }
-        }
       ]
     }
     osProfile: {
