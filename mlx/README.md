@@ -7,7 +7,7 @@ systemd disable --now firewalld
 
 ```bash
 #vm1
-ip link add name geneve0 type geneve id 1000 remote 10.0.0.5
+ip link add name geneve0 type geneve id 1000 remote 10.0.0.5 df set
 ip link set geneve0 up
 ip addr add 10.200.1.1/32 dev geneve0
 ip route add 10.200.2.1/32 dev geneve0
@@ -16,7 +16,7 @@ ip link set geneve0 mtu 450
 
 ```bash
 # vm2
-ip link add name geneve0 type geneve id 1000 remote 10.0.0.4
+ip link add name geneve0 type geneve id 1000 remote 10.0.0.4 df set
 ip link set geneve0 up
 ip addr add 10.200.2.1/32 dev geneve0
 ip route add 10.200.1.1/32 dev geneve0
@@ -36,10 +36,10 @@ while sleep 0.1 ; do until devlink health diagnose $DLID reporter tx | grep stop
 
 ```bash
 # from vm1:
-systemd-run --user -u client1 iperf3 -c 10.0.0.5 -w 30k -t 80000 -P 42 -R -i 60
-systemd-run --user -u client4 iperf3 -c 10.0.0.5 -w 25k -t 80000 -p 5204 -P 112 -i 60
-systemd-run --user -u client3 iperf3 -c 10.200.2.1 -p 5203 -t 80000 -R -P 64 -i 60
-systemd-run --user -u client2 iperf3 -c 10.200.2.1 -p 5202 -t 80000 -P 64 -i 60
+systemd-run --user -u client1 -p Restart=always iperf3 -c 10.0.0.5 -w 30k -t 80000 -P 42 -R -i 60
+systemd-run --user -u client4 -p Restart=always iperf3 -c 10.0.0.5 -w 25k -t 80000 -p 5204 -P 112 -i 60
+systemd-run --user -u client3 -p Restart=always iperf3 -c 10.200.2.1 -p 5203 -t 80000 -R -P 64 -i 60
+systemd-run --user -u client2 -p Restart=always iperf3 -c 10.200.2.1 -p 5202 -t 80000 -P 64 -i 60
 systemd-run --user -u ping    ping vm2 -O
 ```
 
@@ -52,4 +52,9 @@ sudo apt download iperf3
 sudo apt install --simulate ./*.deb
 sudo apt download  ibverbs-providers libibverbs1 libiperf0 libnl-3-200 libnl-route-3-200 libpcap0.8t64 libsctp1  lksctp-tools libjq1 libonig5 jq
 sudo apt install tmux
+```
+
+```bash
+systemd-run -u prom -p Restart=always -- /usr/local/bin/prometheus --config.file /etc/prometheus.yml
+systemd-run -u node_exporter -p Restart=always -- /usr/local/bin/node_exporter  --collector.ethtool
 ```

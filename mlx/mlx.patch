@@ -1,0 +1,89 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c	2025-09-27 06:40:27.421360604 +0000
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c	2025-09-27 07:07:30.284459076 +0000
+@@ -223,21 +223,54 @@
+ 			 mlx5e_health_recover_channels(priv);
+ }
+ 
++static int mlx5_core_query_sq_state_extra(struct mlx5_core_dev *dev, u32 sqn, u8 *state, u32 *hwc, u32 *swc)
++{
++        void *out;
++        void *sqc;
++        void *wq;
++        int inlen;
++        int err;
++
++        inlen = MLX5_ST_SZ_BYTES(query_sq_out);
++        out = kvzalloc(inlen, GFP_KERNEL);
++        if (!out)
++                return -ENOMEM;
++
++        err = mlx5_core_query_sq(dev, sqn, out);
++        if (err)
++                goto out;
++
++        sqc = MLX5_ADDR_OF(query_sq_out, out, sq_context);
++	wq  = MLX5_ADDR_OF(sqc, sqc, wq);
++        *state = MLX5_GET(sqc, sqc, state);
++        *hwc = MLX5_GET(wq, wq, hw_counter);
++        *swc = MLX5_GET(wq, wq, sw_counter);
++
++out:
++        kvfree(out);
++        return err;
++}
++
+ static void
+ mlx5e_tx_reporter_build_diagnose_output_sq_common(struct devlink_fmsg *fmsg,
+ 						  struct mlx5e_txqsq *sq, int tc)
+ {
+ 	bool stopped = netif_xmit_stopped(sq->txq);
+ 	u8 state;
++	u32 hwc;
++ 	u32 swc;
+ 	int err;
+ 
+ 	devlink_fmsg_u32_pair_put(fmsg, "tc", tc);
+ 	devlink_fmsg_u32_pair_put(fmsg, "txq ix", sq->txq_ix);
+ 	devlink_fmsg_u32_pair_put(fmsg, "sqn", sq->sqn);
+ 
+-	err = mlx5_core_query_sq_state(sq->mdev, sq->sqn, &state);
+-	if (!err)
++	err = mlx5_core_query_sq_state_extra(sq->mdev, sq->sqn, &state, &hwc, &swc);
++	if (!err) {
+ 		devlink_fmsg_u8_pair_put(fmsg, "HW state", state);
++		devlink_fmsg_u32_pair_put(fmsg, "HW counter", hwc);
++		devlink_fmsg_u32_pair_put(fmsg, "SW counter", swc);
++        }
+ 
+ 	devlink_fmsg_bool_pair_put(fmsg, "stopped", stopped);
+ 	devlink_fmsg_u32_pair_put(fmsg, "cc", sq->cc);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.c	2025-09-27 08:42:26.310517409 +0000
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.c	2025-09-27 08:47:27.028919440 +0000
+@@ -21,15 +21,27 @@
+ {
+ 	u32 out[MLX5_ST_SZ_DW(query_cq_out)] = {};
+ 	u8 hw_status;
++	u32 hw_last_notified_index;
++	u32 hw_last_solicit_index;
++	u32 hw_consumer_counter;
++	u32 hw_producer_counter;
+ 	void *cqc;
+ 
+ 	mlx5_core_query_cq(cq->mdev, &cq->mcq, out);
+ 	cqc = MLX5_ADDR_OF(query_cq_out, out, cq_context);
+ 	hw_status = MLX5_GET(cqc, cqc, status);
++	hw_last_notified_index = MLX5_GET(cqc, cqc, last_notified_index);
++	hw_last_solicit_index = MLX5_GET(cqc, cqc, last_solicit_index);
++	hw_consumer_counter = MLX5_GET(cqc, cqc, consumer_counter);
++	hw_producer_counter = MLX5_GET(cqc, cqc, producer_counter);
+ 
+ 	mlx5e_health_fmsg_named_obj_nest_start(fmsg, "CQ");
+ 	devlink_fmsg_u32_pair_put(fmsg, "cqn", cq->mcq.cqn);
+ 	devlink_fmsg_u8_pair_put(fmsg, "HW status", hw_status);
++	devlink_fmsg_u32_pair_put(fmsg, "last notified idx", hw_last_notified_index);
++	devlink_fmsg_u32_pair_put(fmsg, "last solicit idx", hw_last_solicit_index);
++	devlink_fmsg_u32_pair_put(fmsg, "HW consumer counter", hw_consumer_counter);
++	devlink_fmsg_u32_pair_put(fmsg, "HW producer counter", hw_producer_counter);
+ 	devlink_fmsg_u32_pair_put(fmsg, "ci", mlx5_cqwq_get_ci(&cq->wq));
+ 	devlink_fmsg_u32_pair_put(fmsg, "size", mlx5_cqwq_get_size(&cq->wq));
+ 	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
