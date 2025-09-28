@@ -58,8 +58,8 @@
  	devlink_fmsg_bool_pair_put(fmsg, "stopped", stopped);
  	devlink_fmsg_u32_pair_put(fmsg, "cc", sq->cc);
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.c	2025-09-27 08:42:26.310517409 +0000
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.c	2025-09-28 11:01:10.497400059 +0000
-@@ -21,15 +21,30 @@
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.c	2025-09-28 15:13:38.344525562 +0000
+@@ -21,15 +21,39 @@
  {
  	u32 out[MLX5_ST_SZ_DW(query_cq_out)] = {};
  	u8 hw_status;
@@ -67,6 +67,9 @@
 +	u32 hw_last_solicit_index;
 +	u32 hw_consumer_counter;
 +	u32 hw_producer_counter;
++	u8 hw_st;
++	u8 hw_cq_period;
++	u8 hw_cq_max_count;
  	void *cqc;
 +	int err;
  
@@ -78,6 +81,9 @@
 +	hw_last_solicit_index = MLX5_GET(cqc, cqc, last_solicit_index);
 +	hw_consumer_counter = MLX5_GET(cqc, cqc, consumer_counter);
 +	hw_producer_counter = MLX5_GET(cqc, cqc, producer_counter);
++	hw_st = MLX5_GET(cqc, cqc, st);
++	hw_cq_period = MLX5_GET(cqc, cqc, cq_period);
++	hw_cq_max_count = MLX5_GET(cqc, cqc, cq_max_count);
  
  	mlx5e_health_fmsg_named_obj_nest_start(fmsg, "CQ");
  	devlink_fmsg_u32_pair_put(fmsg, "cqn", cq->mcq.cqn);
@@ -88,11 +94,14 @@
 +		devlink_fmsg_u32_pair_put(fmsg, "last solicit idx", hw_last_solicit_index);
 +		devlink_fmsg_u32_pair_put(fmsg, "HW consumer counter", hw_consumer_counter);
 +		devlink_fmsg_u32_pair_put(fmsg, "HW producer counter", hw_producer_counter);
++		devlink_fmsg_u8_pair_put(fmsg, "st", hw_st);
++		devlink_fmsg_u8_pair_put(fmsg, "period", hw_cq_period);
++		devlink_fmsg_u8_pair_put(fmsg, "max count", hw_cq_max_count);
 +	}
  	devlink_fmsg_u32_pair_put(fmsg, "ci", mlx5_cqwq_get_ci(&cq->wq));
  	devlink_fmsg_u32_pair_put(fmsg, "size", mlx5_cqwq_get_size(&cq->wq));
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
-@@ -49,14 +64,42 @@
+@@ -49,14 +73,42 @@
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
  }
  
